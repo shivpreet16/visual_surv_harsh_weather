@@ -8,6 +8,7 @@ from utils import make_dataset, edge_compute  # Ensure utils.py has these functi
 import argparse
 from tqdm import tqdm
 import time
+from objecttracking_trails import trails
 
 # Set number of times to derain/dehaze
 parser = argparse.ArgumentParser()
@@ -43,23 +44,28 @@ model_derain.load_state_dict(torch.load(model_derain_path, map_location='cuda' i
 model_dehaze.eval()
 model_derain.eval()
 
-# Function to extract frames from video
+# Function to extract frames from video with progress bar
 def video_to_frames(video_path):
     cap = cv2.VideoCapture(video_path)
     frame_paths = []
     frame_dir = f"{os.path.splitext(os.path.basename(video_path))[0]}_frames"
     if not os.path.exists(frame_dir):
         os.makedirs(frame_dir)
+    
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    with tqdm(total=total_frames, desc="Extracting frames") as pbar:
+        frame_count = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame_path = os.path.join(frame_dir, f"frame_{frame_count:04d}.jpg")
+            cv2.imwrite(frame_path, frame)
+            frame_paths.append(frame_path)
+            frame_count += 1
+            pbar.update(1)  # Update the progress bar for each extracted frame
 
-    frame_count = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frame_path = os.path.join(frame_dir, f"frame_{frame_count:04d}.jpg")
-        cv2.imwrite(frame_path, frame)
-        frame_paths.append(frame_path)
-        frame_count += 1
     cap.release()
     return frame_paths, frame_dir
 
@@ -145,3 +151,4 @@ print(f"Estimated total processing time: {estimated_total_time / 60:.2f} minutes
 
 # Recompile processed frames into a video
 frames_to_video(processed_frame_dir, output_video)
+trails(output_video)
